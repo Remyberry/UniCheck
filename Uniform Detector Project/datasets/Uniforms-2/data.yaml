@@ -1,0 +1,15 @@
+names:
+- notInUniform
+- pe-ntstp
+- person
+- uniforms
+nc: 4
+roboflow:
+  license: CC BY 4.0
+  project: uniforms-dwmhn
+  url: https://universe.roboflow.com/bahaynidon/uniforms-dwmhn/dataset/2
+  version: 2
+  workspace: bahaynidon
+test: test/images
+train: train/images
+val: valid/images
