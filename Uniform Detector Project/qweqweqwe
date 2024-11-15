@@ -1,0 +1,31 @@
+from supervision import LabelAnnotator
+import cv2
+
+# Define custom colors for each label
+color_lookup = {
+    "cat": (255, 0, 0),    # Red for "cat"
+    "dog": (0, 255, 0),    # Green for "dog"
+    "car": (0, 0, 255)     # Blue for "car"
+}
+
+# Initialize the annotator with color lookup
+annotator = LabelAnnotator(color_lookup=color_lookup)
+
+# Sample image and detections
+image = cv2.imread("image.png")
+detections = [
+    {"bbox": [100, 150, 200, 250], "label": "cat"},
+    {"bbox": [300, 400, 350, 450], "label": "dog"},
+    {"bbox": [500, 100, 600, 200], "label": "car"}
+]
+
+# Annotate the image
+for detection in detections:
+    bbox = detection["bbox"]
+    label = detection["label"]
+    image = annotator.annotate(image, bbox=bbox, label=label)
+
+# Show the result
+cv2.imshow("Annotated Image", image)
+cv2.waitKey(0)
+cv2.destroyAllWindows()
