@@ -103,7 +103,7 @@ root.attributes('-fullscreen', True)
 
 # Create a frame to hold the grid layout
 mainframe = tk.CTkFrame(root)
-mainframe.pack(fill="both", expand=True)  # Make the frame fill the entire window
+mainframe.pack(fill="both", expand=True, padx=20, pady=(80, 20))  # Make the frame fill the entire window
 # Configure the grid layout
 for i in range(8):
     mainframe.rowconfigure(i, weight=1, uniform=True)
@@ -151,8 +151,25 @@ button_clr.grid(column=5, row=6, padx=10, pady=10)
 button_generate_ticket = tk.CTkButton(mainframe, text="Generate Ticket")
 button_generate_ticket.grid(column=5, row=7, padx=10, pady=10)
 
-student_info_field = tk.CTkLabel(mainframe, text="Student Info")
+student_info_field = tk.CTkFrame(mainframe)
 student_info_field.grid(column=6, row=2, columnspan=2, rowspan=6, sticky="nsew")
+
+student_info_field.rowconfigure(0, uniform=True)
+student_info_field.rowconfigure(1, uniform=True)
+student_info_field.rowconfigure(2, uniform=True)
+student_info_field.rowconfigure(3, uniform=True)
+
+student_number = tk.CTkLabel(student_info_field, text="Student No. : ", font=("Arial", 18))
+student_number.grid(row=0, sticky="w", ipadx= 10, ipady= 10)
+
+student_name = tk.CTkLabel(student_info_field, text="Student Name : ", font=("Arial", 18))
+student_name.grid(row=1, sticky="w", ipadx= 10, ipady= 10)
+
+student_course = tk.CTkLabel(student_info_field, text="Course-Section : ", font=("Arial", 18))
+student_course.grid(row=2, sticky="w", ipadx= 10,ipady= 10)
+
+student_gmail = tk.CTkLabel(student_info_field, text="GMail : ", font=("Arial", 18))
+student_gmail.grid(row=3, sticky="w", ipadx= 10, ipady= 10)
 
 root.update()
 

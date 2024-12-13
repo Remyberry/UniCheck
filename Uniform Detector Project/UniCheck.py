@@ -1,31 +1,29 @@
 import ast
-from email import encoders
+from email import encoders                          #modules for working with email messages, including creating, sending, and parsing emails.
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from pyzbar.pyzbar import decode    #QR CODE SCANNER
-from PIL import Image, ImageTk                      #Pillow Library (Image Processing)
-import customtkinter as tk                          #Custom Tkinter for better GUI
+from pyzbar.pyzbar import decode                    #decoding QR codes and other barcodes.
+from PIL import Image, ImageTk                      #Python Imaging Library (PIL) is used for opening, manipulating, and saving images.
+import customtkinter as tk                          #creating custom Tkinter GUIs.
 from ultralytics import YOLO                        #YOLOv8
-import supervision as sv                            #Supervision by Roboflow Detection and Annotation
-import threading                                    #Multithreading
-from datetime import datetime
-from openpyxl import Workbook, load_workbook
+import supervision as sv                            #library for annotating and visualizing object detection results
+import threading                                    #built-in Python module for managing concurrent threads
+from datetime import datetime                       #module for working with dates and times
+from openpyxl import load_workbook        #Python library for reading and writing Excel files
 from openpyxl.styles import Font, PatternFill
 from openpyxl.drawing.image import Image as xImage
-from email.mime.image import MIMEImage
-import pandas as pd
-import smtplib
-import email
-import torch
-import time                                         
-import cv2                                          #OpenCV camera library
-import csv
-import sys                                          
-import os
+import pandas as pd                                 #data analysis and manipulation library
+import smtplib                                      #module for sending email messages.
+import cv2                                          #library for computer vision tasks like image processing and video analysis.
+import csv                                          #module for reading and writing CSV files.
+import sys                                          #module for system-specific parameters and functions.
+import os                                           #module for interacting with the operating system
+import sqlite3
+import io
 
 
-class MultiCamApp:
+class MultiCamApp:                                  #main app class
     def __init__(self, root):
         self.root = root
         self.root.title("Live Camera Feed")
@@ -33,6 +31,7 @@ class MultiCamApp:
         self.root.attributes('-fullscreen', True)
 
         self.today = datetime.today()
+        self.timeNow = datetime.now()
         date_formatted = self.today.strftime("%Y-%m-%d")
         # Create the "NewFolder" directory if it doesn't exist
         self.folder_path = os.path.join(os.path.expanduser("~\Documents"), "UniCheck")
@@ -47,10 +46,12 @@ class MultiCamApp:
         self.qr_detector = QRDetector
         self.csv_handler = CSVHandler
         self.email_handler = EmailHandler()
-
+    
         self.qr_data_dict= {}
+        self.update_dict = {}
         self.remarks = ""
         self.hairStatus = ""
+        
 
         # Flags to control camera feed
         self.cam1_running = False
@@ -58,9 +59,51 @@ class MultiCamApp:
         self.cam1_frame = None  # Variable to store the current frame of Camera 1
         self.cam1_stored_frame = None
         
+        topframe = tk.CTkFrame(self.root)
+        topframe.pack(fill="both", padx=20, pady=(20, 0))
+        parent_bg = topframe.cget("fg_color")
+        # Open the logo image
+        logoPNG = Image.open('CCA-logo.png')
+        width, height = logoPNG.size
+        aspect_ratio = width / height
+
+        # Determine the new dimensions while preserving the aspect ratio
+        if width > height:
+            new_width = 100
+            new_height = int(new_width / aspect_ratio)
+        else:
+            new_height = 100
+            new_width = int(new_height * aspect_ratio)
+
+        # Resize the image to fit within the 100x100 canvas
+        logoPNG = logoPNG.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        logoPNGimg = ImageTk.PhotoImage(logoPNG)
+        self.root.logoPNGimg = logoPNGimg  # Prevent garbage collection
+
+        # Create the canvas
+        ccaLogo = tk.CTkCanvas(topframe, width=100, height=100, highlightthickness=1, highlightbackground="black", background="grey")
+        ccaLogo.grid(row=0, column=0, sticky="nsew")
+
+        # Center the image within the canvas
+        x_offset = (100 - new_width) // 2
+        y_offset = (100 - new_height) // 2
+        ccaLogo.create_image(x_offset, y_offset, anchor="nw", image=logoPNGimg)
+
+        # Add the "UniCheck" text next to the logo
+        unicheck_label = tk.CTkLabel(topframe, text="UniCheck", font=("Arial", 24, "bold"))
+        unicheck_label.grid(row=0, column=1, sticky="w", padx=(0, 10))
+        
+        # Add the exit button on the rightmost side
+        exit_button = tk.CTkButton(topframe, text="Exit", command= self.on_close, fg_color="red", text_color="white")
+        exit_button.grid(row=0, column=2, sticky="e", padx=(10, 0))
+
+        # Adjust column weights to push the exit button to the rightmost side
+        topframe.columnconfigure(0, weight=0)  # Logo column
+        topframe.columnconfigure(1, weight=1)  # UniCheck text column
+        topframe.columnconfigure(2, weight=0)  # Exit button column
         # Create a frame to hold the grid layout
-        mainframe = tk.CTkFrame(root)
-        mainframe.pack(fill="both", expand=True)  # Make the frame fill the entire window
+        mainframe = tk.CTkFrame(self.root)
+        mainframe.pack(fill="both", expand=True, padx=20, pady=(0, 20))  # Make the frame fill the entire window
 
         # Configure the grid layout
         for i in range(8):
@@ -82,17 +125,17 @@ class MultiCamApp:
         self.canvas_3 = tk.CTkCanvas(mainframe, highlightthickness = 1, highlightbackground = "black", background = "grey")
         self.canvas_3.grid(row=0, column=6, rowspan=2, columnspan=2, sticky="nsew")    
 
-        self.button_open_1 = tk.CTkButton(mainframe, text="Open Camera 1", command= self.start_cam1)
+        self.button_open_1 = tk.CTkButton(mainframe, text="Open Cam 1", command= self.cam1Toggle)
         self.button_open_1.grid(column=0, row=6, padx=10, pady=10)
 
-        self.button_close_1 = tk.CTkButton(mainframe, text="Close Camera 1", command= self.stop_cam1)
-        self.button_close_1.grid(column=0, row=7, padx=10, pady=10)
+        # self.button_close_1 = tk.CTkButton(mainframe, text="Close Cam 1", command= self.stop_cam1)
+        # self.button_close_1.grid(column=0, row=7, padx=10, pady=10)
 
-        self.button_open_2 = tk.CTkButton(mainframe, text="Open Camera 2", command= self.start_cam2)
+        self.button_open_2 = tk.CTkButton(mainframe, text="Open Cam 2", command= self.cam2Toggle)
         self.button_open_2.grid(column=1, row=6, padx=10, pady=10)
 
-        self.button_close_2 = tk.CTkButton(mainframe, text="Close Camera 2", command= self.stop_cam2)
-        self.button_close_2.grid(column=1, row=7, padx=10, pady=10)
+        # self.button_close_2 = tk.CTkButton(mainframe, text="Close Camera 2", command= self.stop_cam2)
+        # self.button_close_2.grid(column=1, row=7, padx=10, pady=10)
 
         self.text_field = tk.CTkTextbox(mainframe, activate_scrollbars=True,wrap='word', font=('Arial',18))
         self.text_field.grid(column=2, row=6, columnspan=2, rowspan=2, sticky="nsew")
@@ -109,9 +152,29 @@ class MultiCamApp:
 
         self.button_generate_ticket = tk.CTkButton(mainframe, text="Generate Ticket", command= self.on_generate_ticket_press)
         self.button_generate_ticket.grid(column=5, row=7, padx=10, pady=10)
+        
+        student_IDPhoto = tk.CTkFrame(mainframe)
+        student_IDPhoto.grid(column=6, row=2, columnspan=2, rowspan=4, sticky="nsew")
 
-        self.student_info_field = tk.CTkLabel(mainframe, text="Student Info")
-        self.student_info_field.grid(column=6, row=2, columnspan=2, rowspan=6, sticky="nsew")
+        student_info_field = tk.CTkFrame(mainframe)
+        student_info_field.grid(column=6, row=5, columnspan=2, rowspan=6, sticky="nsew")
+
+        student_info_field.rowconfigure(0, uniform=True)
+        student_info_field.rowconfigure(1, uniform=True)
+        student_info_field.rowconfigure(2, uniform=True)
+        student_info_field.rowconfigure(3, uniform=True)
+
+        self.student_number = tk.CTkLabel(student_info_field, text="Student No. : ", font=("Arial", 18))
+        self.student_number.grid(row=0, sticky="w", ipadx= 10, ipady= 10)
+
+        self.student_name = tk.CTkLabel(student_info_field, text="Student Name : ", font=("Arial", 18))
+        self.student_name.grid(row=1, sticky="w", ipadx= 10, ipady= 10)
+
+        self.student_course = tk.CTkLabel(student_info_field, text="Course-Section : ", font=("Arial", 18))
+        self.student_course.grid(row=2, sticky="w", ipadx= 10,ipady= 10)
+
+        self.student_gmail = tk.CTkLabel(student_info_field, text="GMail : ", font=("Arial", 18))
+        self.student_gmail.grid(row=3, sticky="w", ipadx= 10, ipady= 10)
 
         # Update all changes made to the layout
         self.root.update()
@@ -121,20 +184,38 @@ class MultiCamApp:
         self.image_id_2 = self.canvas_2.create_image(self.canvas_2.winfo_width()//2, self.canvas_2.winfo_height()//2, anchor="center")
         # self.image_id_3 = self.canvas_3.create_image(self.canvas_3.winfo_width()//2, self.canvas_3.winfo_height()//2, anchor="center")
   
+
+    def cam1Toggle(self):
+        if self.button_open_1._text == 'Open Cam 1':
+                self.button_open_1.configure(text="Close Cam 1")
+                self.start_cam1()
+        else:
+            self.button_open_1.configure(text="Open Cam 1")
+            self.stop_cam1()
+    
+    def cam2Toggle(self):
+        if self.button_open_2._text == 'Open Cam 2':
+                self.button_open_2.configure(text="Close Cam 2")
+                self.start_cam2()
+        else:
+            self.button_open_2.configure(text="Open Cam 2")
+            self.stop_cam2()
+
+
     def start_cam1(self):
         if not self.cam1_running:
             self.cam1_running = True
             self.cam1_thread = threading.Thread(target=self.camera_feed, args=(1, self.canvas_1, "cam1"))
             # Enable or disable buttons based on camera status
-            self.button_open_1.configure(state="disabled")
-            self.button_close_1.configure(state="normal")
+            # self.button_open_1.configure(state="disabled")
+            # self.button_close_1.configure(state="normal")
             self.cam1_thread.start()
             # self.append_to_terminal("Camera 1 enabled")
 
     def stop_cam1(self):
         self.cam1_running = False
-        self.button_open_1.configure(state="normal")
-        self.button_close_1.configure(state="disabled")
+        # self.button_open_1.configure(state="normal")
+        # self.button_close_1.configure(state="disabled")
         # self.append_to_terminal("Camera 1 disabled")
 
     def start_cam2(self):
@@ -142,21 +223,21 @@ class MultiCamApp:
             self.cam2_running = True
             self.cam2_thread = threading.Thread(target=self.camera_feed, args=(0, self.canvas_2, "cam2"))
             # Enable or disable buttons based on camera status
-            self.button_open_2.configure(state="disabled")
-            self.button_close_2.configure(state="normal")
+            # self.button_open_2.configure(state="disabled")
+            # self.button_close_2.configure(state="normal")
             self.cam2_thread.start()
             # self.append_to_terminal("Camera 2 enabled")
 
     def stop_cam2(self):
         self.cam2_running = False
-        self.button_open_2.configure(state="normal")
-        self.button_close_2.configure(state="disabled")
+        # self.button_open_2.configure(state="normal")
+        # self.button_close_2.configure(state="disabled")
         # self.append_to_terminal("Camera 2 disabled")
 
     def camera_feed(self, cam_index, canvas, cam_name):
         cap = cv2.VideoCapture(cam_index, cv2.CAP_DSHOW)
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
         while getattr(self, f'{cam_name}_running'):
             ret, frame = cap.read()
             if ret:
@@ -178,7 +259,8 @@ class MultiCamApp:
 
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 img = Image.fromarray(frame)
-                img = img.resize((canvas.winfo_width(), canvas.winfo_height()), Image.NEAREST)
+                if cam_name == "cam1":
+                    img = img.resize((canvas.winfo_width(), canvas.winfo_height()), Image.NEAREST)
                 imgtk = ImageTk.PhotoImage(image=img)
 
                 # Store the frame for respective camera if it's running
@@ -200,6 +282,7 @@ class MultiCamApp:
     def capture_cam1(self):
         if self.cam1_frame is not None:
             # Convert the stored frame from Camera 1 to display it
+            
             img = Image.fromarray(self.cam1_frame)
             imgtk = ImageTk.PhotoImage(image=img)
             self.canvas_3.create_image(self.canvas_3.winfo_width()//2, self.canvas_3.winfo_height()//2, anchor="center", image=imgtk)
@@ -212,14 +295,16 @@ class MultiCamApp:
             
             #Add new column to Dictionary
             self.qr_data_dict['Remarks'] = self.remarks
+            self.update_dict['Time_of_entry']  = self.timeNow.strftime("%H:%M:%S")
+            self.update_dict.update(self.qr_data_dict)
 
             #Send email only if not in uniform or hair not allowed
-            if (self.remarks == 'Not_In_Uniform ') or (self.remarks == "Not_In_Uniform Hair_Allowed") or (self.remarks == "In_Uniform Hair_Not_Allowed"):
+            if (self.remarks == 'Not_In_Uniform ') or (self.remarks == "Not_In_Uniform Hair_Allowed") or (self.remarks == "In_Uniform Hair_Not_Allowed") or (self.hairStatus == 'Hair_Not_Allowed'):
                 self.email_handler.send_email(receiver_email=studentEmail, image_path=image_path)
                 self.append_to_terminal(f"Email sent to: {studentEmail}")
 
             #csv and log
-            self.csv_handler.log_data_to_csv(self.qr_data_dict, image_path, self.csv_file_path)
+            self.csv_handler.log_data_to_csv(self.update_dict, image_path, self.csv_file_path)
             self.csv_handler.generate_xlsx_with_images(self.csv_file_path, self.xlsx_file_path)
             self.csv_handler.format_xlsx(self.xlsx_file_path)
             self.append_to_terminal(f"Logged successfully: {studentID}")          
@@ -275,15 +360,9 @@ class MultiCamApp:
         self.email_handler.send_email(self.qr_data_dict["Gmail"],self.cam1_stored_frame)
 
 
-class ObjectDetector:
+class ObjectDetector:                               #object detection and annotation
     def __init__(self, model_path):
         self.model = YOLO(model_path)  # Load your custom object detection model
-        # self.class_name_map = {
-        #     "notInUniform": "Not_In_Uniform",
-        #     "pe-ntstp": "PE_NSTP",
-        #     "person": "Person",
-        #     "uniforms": "In_Uniform"
-        # }
         self.color_lookup = {
             "HairAllowed": sv.Color(0, 255, 0),
             "HairNotAllowed": sv.Color(255, 0, 0),
@@ -293,17 +372,6 @@ class ObjectDetector:
         }
 
     def detect(self, frame):
-        """
-        Performs object detection on a given frame.
-
-        Args:
-            frame: The image frame as a NumPy array.
-
-        Returns:
-            A tuple containing:
-                - detections: An instance of sv.Detections containing detected objects and their properties.
-                - frame: The annotated frame with bounding boxes and labels (optional).
-        """
         self.label_annotator1 = sv.LabelAnnotator(text_position=sv.Position.TOP_CENTER,text_scale=0.5,text_thickness=1,text_padding=10,color=sv.Color(255, 0, 0))
         self.box_annotator1 = sv.BoxCornerAnnotator(thickness=2,color=sv.Color(255, 0, 0))      #Red
 
@@ -355,14 +423,7 @@ class ObjectDetector:
                 return frame2 , remark
 
         return frame, ""
-        # frame = label_annotator.annotate(scene=frame, detections=detections, labels=labels)
-        # frame = box_annotator.annotate(scene=frame, detections=detections)
-        # return frame , remark
-
         # Handle manual coloring annotations
-        
-        
-
         # if ("HairNotAllowed" in detections['class_name']):
         #     hair_status = "Hair_Not_Allowed"
         #     frame = self.label_annotator1.annotate(scene=frame, detections=detections, labels=labels)
@@ -415,8 +476,6 @@ class ObjectDetector:
         #     remark = remark + hair_status
         #     print(remark)
         #     return frame, remark
-
-
         # frame = self.label_annotator3.annotate(scene=frame, detections=detections, labels=labels)
         # frame = self.box_annotator3.annotate(scene=frame, detections=detections)
         # return frame , detections['class_name']
@@ -439,7 +498,7 @@ class ObjectDetector:
         return file_path
 
 
-class QRDetector:
+class QRDetector:               #class for handling qr detection
 
     def read_qr_code(frame):
         # Convert the frame to grayscale for better QR code detection
@@ -453,27 +512,23 @@ class QRDetector:
             # print("Decoded Data:", data)
             app.stop_cam2()
             return data
-
-        # If QR codes are detected, extract the data
-        # if len(qrcodes) > 0:
-        #     for qrcode in qrcodes:
-        #         data = qrcode.data.decode('utf-8')
                  
 
-class CSVHandler:
+class CSVHandler:               #class for handling csv and generating xlsx reports
     def log_data_to_csv(student_data, image_path, csv_file_path):
         file_exists = os.path.isfile(csv_file_path)
         # student_data['Remarks'] = remarks
+
         # Add image path to the student data
         student_data['Capture'] = image_path
-
+        print(student_data)
         # Write the student data to the CSV file
         with open(csv_file_path, 'a', newline='', encoding='utf-8') as csvfile:
             writer = csv.writer(csvfile)
             # Write headers only if file doesn't exist
             if not file_exists:
-                writer.writerow(["StudentID", "StudentName", "Course-Section", "Gmail", "Remarks", "Capture"])
-            writer.writerow([student_data['StudentID'], student_data['StudentName'], 
+                writer.writerow(["Time_of_entry","StudentID", "StudentName", "Course-Section", "Gmail", "Remarks", "Capture"])
+            writer.writerow([student_data['Time_of_entry'], student_data['StudentID'], student_data['StudentName'], 
                             student_data['Course-Section'],student_data['Gmail'], student_data['Remarks'], student_data['Capture']])
 
     def read_csv(csv_file_path):
@@ -485,13 +540,10 @@ class CSVHandler:
     def appendFiles(data, csv_file_path):
         with open(csv_file_path, 'a', newline='', encoding="utf-8") as csvfile:                 #Writing a csv file with UTF-8 encoding
             writer = csv.writer(csvfile)                                                        #New Instance of csv.writer
-            writer.writerow(["StudentID", "StudentName", "Course-Section", "Gmail", "Remarks", "Capture"])                   #Assigning columns
+            writer.writerow(["Time_of_entry","StudentID", "StudentName", "Course-Section", "Gmail", "Remarks", "Capture"])                   #Assigning columns
             for item in data:
-                writer.writerow([item['StudentID'], item['StudentName'], item['Course-Section'], item['Gmail'], item['Remarks'], item['Capture']])
+                writer.writerow([item['Time_of_entry'], item['StudentID'], item['StudentName'], item['Course-Section'], item['Gmail'], item['Remarks'], item['Capture']])
 
-    # def read_csv_file(csv_file_path):
-    #     with open (csv_file_path, 'r') as csv_file:
-    #         csv_reader = csv.reader(csv_file)
 
     def format_xlsx(xlsx_file_path):
         try:
@@ -549,10 +601,10 @@ class CSVHandler:
                         # column_width = img_width / 7  # Set column width based on image width
                         # row_height = img_height / 20  # Set row height based on image height
                         # # Set the column width and row height for the cell
-                        ws.column_dimensions['F'].width = 90.71
+                        ws.column_dimensions['G'].width = 90.71
                         ws.row_dimensions[index+2].height = 360
 
-                        ws.add_image(img, f"F{index+2}")  # Place in the Capture column (e.g., column F)
+                        ws.add_image(img, f"G{index+2}")  # Place in the Capture column (e.g., column F)
 
             # Save the workbook
             wb.save(xlsx_file_path)
@@ -560,24 +612,14 @@ class CSVHandler:
             app.append_to_terminal(f"Error: The file '{xlsx_file_path}' is currently open. Please close it and try again.")
      
 
-class EmailHandler:
+class EmailHandler:             #creating and sending emails
     def __init__(self):
             # Example usage
         self.sender_email = 'don.bruno1913@gmail.com'
         self.subject = 'Test Email'
-        self.body = 'You have violated the regulations outlined in the City College of Angeles Student Handbook. Please proceed to the Student Affairs and Services Office (SASO) for further assistance.'
+        self.body = "We detected a violation for further information regarding this matter, kindly proceed to Student Affair and Services Office (SASO)."
 
     def send_email(self, receiver_email, image_path):
-        """
-        Sends an email using Gmail.
-
-        Args:
-            sender_email: The sender's email address.
-            receiver_email: The receiver's email address.
-            subject: The subject of the email.
-            body: The body of the email.
-        """
-
         # Compose the email message
         msg = MIMEMultipart()
         msg['From'] = self.sender_email
@@ -610,9 +652,9 @@ class EmailHandler:
             app.append_to_terminal(f"Failed to send email: {e}")
 
 
-
-if __name__ == '__main__':
+if __name__ == '__main__':          #MainLoop
     root = tk.CTk()
+    root._set_appearance_mode("dark")
     app = MultiCamApp(root)
     # app.start_cam1()
     # app.start_cam2()
