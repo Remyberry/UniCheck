@@ -704,7 +704,7 @@ class CSVHandler:               #class for handling csv and generating xlsx repo
 class EmailHandler:             #creating and sending emails
     def __init__(self):
             # Example usage
-        self.sender_email = 'don.bruno1913@gmail.com'
+        self.sender_email = 'sample.sender@email.com'
         self.subject = 'Test Email'
         self.body = "We detected a violation for further information regarding this matter, kindly proceed to Student Affair and Services Office (SASO)."
 
@@ -733,42 +733,13 @@ class EmailHandler:             #creating and sending emails
             try:
                 with smtplib.SMTP('smtp.gmail.com', 587) as smtp_server:
                     smtp_server.starttls()
-                    smtp_server.login(self.sender_email, 'ikkz potf bhjw spas')  # Use your app password here
+                    smtp_server.login(self.sender_email, 'app pas sword')  # Use your app password here
                     smtp_server.send_message(msg)
                 app.append_to_terminal("Email sent successfully!")
             except Exception as e:
                 app.append_to_terminal(f"Failed to send email: {e}")
         # Start the email sending process in a separate thread
         threading.Thread(target=email_thread, daemon=True).start()
-        # # Compose the email message
-        # msg = MIMEMultipart()
-        # msg['From'] = self.sender_email
-        # msg['To'] = receiver_email
-        # msg['Subject'] = self.subject
-        # msg.attach(MIMEText(self.body, 'plain'))
-
-        # # Attach the image
-        # try:
-        #     with open(image_path, 'rb') as img_file:
-        #         img = MIMEBase('application', 'octet-stream')
-        #         img.set_payload(img_file.read())
-        #         encoders.encode_base64(img)
-        #         img.add_header('Content-Disposition', 'attachment', filename='image.png')
-        #         msg.attach(img)
-        # except Exception as e:
-        #     app.append_to_terminal(f"Error attaching image: {e}")
-        #     return
-
-
-        # # Send the email using SMTP
-        # try:
-        #     with smtplib.SMTP('smtp.gmail.com', 587) as smtp_server:
-        #         smtp_server.starttls()
-        #         smtp_server.login(self.sender_email, 'ikkz potf bhjw spas')  # Use your app password here
-        #         smtp_server.send_message(msg)
-        #     print("Email sent successfully!")
-        # except Exception as e:
-        #     app.append_to_terminal(f"Failed to send email: {e}")
 
 
 if __name__ == '__main__':          #MainLoop
